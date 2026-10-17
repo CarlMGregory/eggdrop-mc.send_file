@@ -1,5 +1,5 @@
 ##
-# Send File v1.7 by (Carl M. Gregory) MC_8 <gregory@worldinter.net>
+# Send File v1.7.1 by (Carl M. Gregory) MC_8 <gregory@worldinter.net>
 #
 # If you have any questions/comments/idea's, please email me!
 # ( Include the script name and version in the title, if you do email me. )
@@ -14,6 +14,9 @@
 ##
 # History  ( <fixed by> - <found by> - <info> )
 ##
+# v1.7.1 (09.29.01)
+#  MC_8 - ayoob - Flag restrictions were not working, fixed.
+#
 # v1.7 (09.29.01)
 #  MC_8 - ayoob - Fixed 'TCL error [mcsf:send:msgm]: no such channel record'.
 #  MC_8 - Fixed overlooked bugs in v1.6.0.1.
@@ -144,8 +147,8 @@ set mc_sf(svs:stableonly) 0
 
 
 ### Do not edit past this part ###
-set mc_sf(version) v1.7
-set mc_sf(svs:script) "sendfile 001007000000"
+set mc_sf(version) v1.7.1
+set mc_sf(svs:script) "sendfile 001007001000"
 set mc_sf(svs:server) "mc.purehype.net 8085"
 
 if {$numversion < "1050000"} {
@@ -185,7 +188,7 @@ proc mcsf:send {nick uhost hand chan args meth} {
    set m_match [matchattr $hand $s_flag $chan]
   }
   if {[string match [string tolower $search] [string tolower $args]] &&
-      [string tolower $chan] == [string tolower $s_chan]} {break} {
+      [string tolower $chan] == [string tolower $s_chan] && $m_match} {break} {
    unset search;unset fullfile;unset s_flag;unset s_chan;unset m_match
   }
  };if {![info exists search]} {return 0}
