@@ -1,8 +1,5 @@
 ##
-# Send File v1.8 by (Carl M. Gregory) MC_8 <gregory@worldinter.net>
-#
-# If you have any questions/comments/idea's, please email me!
-# ( Include the script name and version in the title, if you do email me. )
+# Send File v1.8.1 by MC_8 - Carl M. Gregory <mc8@purehype.net>
 #
 # My SVS Website - http://mc.purehype.net:81/
 ##
@@ -14,6 +11,11 @@
 ##
 # History  ( <fixed by> - <found by> - <info> )
 ##
+# v1.8.1 (09.31.01)
+#  MC_8 - Freeder - Wasn't sending files to unknown users, even if flag
+#                   restrictions were set to -|- (or not set at all).
+#                   Fixed.
+#
 # v1.8 (09.30.01)
 #  MC_8 - Fixed 'Tcl error [mcsf:send:raw:privmsg]: wrong # args: should 
 #         be "string range string first last"'.
@@ -132,7 +134,7 @@ set "mc_sff_msg(m|- get tcl?commands)" "doc/tcl-commands.doc"
 # restriction as well as to see if the user is IN the channel.  This
 # will respond to direct ctcp's and not channel ctcps -- saffer that
 # way.
-set "mc_sff_ctcp(m|- get *list*)" "doc/tcl-commands.doc"
+set "mc_sff_ctcp(get *list*)" "doc/tcl-commands.doc"
 
 
 
@@ -169,8 +171,8 @@ set mc_sf(svs:stableonly) 0
 
 
 ### Do not edit past this part ###
-set mc_sf(version) v1.8
-set mc_sf(svs:script) "sendfile 001008000000"
+set mc_sf(version) v1.8.1
+set mc_sf(svs:script) "sendfile 001008001000"
 set mc_sf(svs:server) "mc.purehype.net 8085"
 
 if {$numversion < "1050000"} {
@@ -213,14 +215,22 @@ proc mcsf:send {nick uhost hand chan args meth} {
  if {($meth == "_pub") && (![mc:sf:inter:chanflagison $chan mc.sendfile])} {return 0}
  foreach search [array names mc_sf${meth}] {
   set fullfile [set mc_sf${meth}($search)]
-  if {[string match *|* [set s_flag [lindex [split $search] 0]]]} {
+  if {[string match *|* [lindex [split $search] 0]]} {
+   set s_flag [lindex [split $search] 0]
    set search [lrange [split $search] 1 e]
-  } else { set s_flag -|- }
-  if {[string match #* [set s_chan [lindex [split $search] 0]]]} {
+  } else {set s_flag -|-}
+  if {[string match #* [lindex [split $search] 0]]} {
+   set s_chan [lindex [split $search] 0]]
    set search [lrange [split $search] 1 e]
-  } else { set s_chan $chan }
-  if {$chan == "*"} {set m_match [matchattr $hand $s_flag]} else {
-   set m_match [matchattr $hand $s_flag $chan]
+  } else {set s_chan $chan}
+  if {$s_chan == "*"} {
+   if {([string trim $hand] == "" || $hand == "*") && ($s_flag == "-|-")} {set m_match 1} {
+    set m_match [matchattr $hand $s_flag]
+   }
+  } else {
+   if {([string trim $hand] == "" || $hand == "*") && ($s_flag == "-|-")} {set m_match 1} {
+    set m_match [matchattr $hand $s_flag $s_chan]
+   }
   }
   if {(($meth == "_msg") || ($meth == "_ctcp")) && ($s_chan != "*")} {
    set m_chan [onchan $nick $chan]
