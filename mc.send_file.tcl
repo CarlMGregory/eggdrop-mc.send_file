@@ -1,10 +1,10 @@
 ##
-# Send File v1.6 by (Carl M. Gregory) MC_8 <gregory@worldinter.net>
+# Send File v1.7 by (Carl M. Gregory) MC_8 <gregory@worldinter.net>
 #
 # If you have any questions/comments/idea's, please email me!
 # ( Include the script name and version in the title, if you do email me. )
 #
-# My SVS Website - http://mc.purehype.net/
+# My SVS Website - http://mc.purehype.net:81/
 ##
 
 ##
@@ -14,6 +14,22 @@
 ##
 # History  ( <fixed by> - <found by> - <info> )
 ##
+# v1.7 (09.29.01)
+#  MC_8 - ayoob - Fixed 'TCL error [mcsf:send:msgm]: no such channel record'.
+#  MC_8 - Fixed overlooked bugs in v1.6.0.1.
+#  MC_8 - If you remove a command or change a command, then rehash -- it would
+#         still remember the origional setting.  A restart had to be done.
+#         I have fixed this, a rehash is all that is nessessary now.  In doing
+#         this, the veriable name from mc_sf changed to mc_sff.
+#  MC_8 - Added more documentation and syntax layout for the new changes.  Please
+#         note that these new changes drastically changed how you would setup
+#         a trigger.
+#  MC_8 - Added ability to have more than 1 command, but with different channel
+#         restrictions.
+#  MC_8 - ayoob - Added ability to have more than 1 command, but with different
+#                 flag restrictions.
+#  MC_8 - ayoob - Added ability to send more than 1 file.
+#
 # v1.6 (06.27.01)
 #  MC_8 - Updated SVS to v1.2
 #  MC_8 - KatzEye - Added ability to restrict each sendfile to flags.
@@ -62,22 +78,38 @@
 
 # This is where you set the public trigger(s) (can contain wildcards), and what
 # it sends on that trigger.  IF your trigger contains a space, you
-# must "quote" it, ie: set "mc_sf_pub(*send me bla.txt*)" "files/bla.txt"
+# must "quote" it, ie: set "mc_sff_pub(*send me bla.txt*)" "files/bla.txt"
 #
 # You can also put required flags on your sendfile triggers, ie. if you only
 # want valid ops to be able to download a certin file.  You would set it like
-# this:  set mc_sf_pub(!ops-info) "o|o doc/ops-info.txt"
+# this:  set "mc_sff_pub(o|o !ops-info)" "doc/ops-info.txt"
 # Flag syntax: <global>|<channel>
 # If you don't put the flag, then anyone can download it, the "|" determin's
 # if a flag restriction is in order.
 #
+# You can have as many files as you like, each file should be seperated by
+# a ' ' (space).  Ie, this will send to o|o flagged users that say !send in the
+# channel:
+#  set "mc_sff_pub(o|o !send)" "doc/tcl-commands.doc files/commands.doc scripts/weed"
+#
+# If files contain a space, put a {} around the file (yes, even if you only provide
+# 1 file to send)  ie.:
+#  set "mc_sff_pub(o|o !send)" "{doc/tcl commands.doc} files/commands.doc scripts/weed"
+#
+# Furthermore (getting tired of reading yet?), you can make the command channel
+# specific as well.  You would do so like this:
+#  set "mc_sff_pub(o|o #eggdrop !send)" "{doc/tcl commands.doc} files/commands.doc scripts/weed"
+# The '#' determin's if a channel restriction is in order.
+#
+# Syntax: set "mc_sff_<pub|msg>([flag<|>[s]] [<#>channel] <trigger>)" "<file> [file [..]]"
+#
 # You may set as many as you like, it must be in this syntax:
-# set mc_sf_pub(<enter the trigger here>) "<put the full path to file here>"
-set mc_sf_pub(!tcl) "doc/tcl-commands.doc"
+# set mc_sff_pub(<enter the trigger here>) "<put the full path to file here>"
+set mc_sff_pub(!tcl) "doc/tcl-commands.doc"
 
 # This is where you set messag'd trigger(s), everything is same as above
-# expect for the insted of set mc_sf_pub it's mc_sf_msg.  Pretty easy.
-set "mc_sf_msg(get tcl?commands)" "doc/tcl-commands.doc"
+# expect for the insted of set mc_sff_pub it's mc_sff_msg.  Pretty easy.
+set "mc_sff_msg(m|- get tcl?commands)" "doc/tcl-commands.doc"
 
 ## MC SVS (Script Version Service) v1.2 ##
 # Do you want the bot to connection to MC_8's SVS to see if there are newer versions
@@ -112,8 +144,8 @@ set mc_sf(svs:stableonly) 0
 
 
 ### Do not edit past this part ###
-set mc_sf(version) v1.6
-set mc_sf(svs:script) "sendfile 001006000000"
+set mc_sf(version) v1.7
+set mc_sf(svs:script) "sendfile 001007000000"
 set mc_sf(svs:server) "mc.purehype.net 8085"
 
 if {$numversion < "1050000"} {
@@ -140,25 +172,41 @@ proc mcsf:send:msgm {n uh h a} {mcsf:send $n $uh $h * $a "_msg"}
 
 proc mcsf:send {nick uhost hand chan args meth} {
  global mc_sf mc_sf_pub mc_sf_msg
- if {![mc:sf:inter:chanflagison $chan mc.sendfile]} {return}
+ if {($meth == "_pub") && (![mc:sf:inter:chanflagison $chan mc.sendfile])} {return}
  foreach search [array names mc_sf${meth}] {
-  if {[string match [string tolower $search] [string tolower $args]]} {break} {unset search}
- }
- if {![info exists search]} {return 0}
- set fullfile [set mc_sf${meth}($search)]
- if {[string match *|* [set flag [lindex $fullfile 0]]]} {
-  if {(![matchattr $hand $flag $chan]) && (($hand == "*") && ($flag != "-|-"))} {return 0}
-  set fullfile [lrange [split $fullfile] 1 e]
- }
- set file [lindex [split $fullfile /] e]
- switch -- [dccsend [set mc_sf${meth}($search)] $nick] {
-  0 {puthelp "NOTICE $nick :Sending $file to you."}
-  1 {puthelp "NOTICE $nick :dcc table is full (too many connections), try to get $file later."}
-  2 {puthelp "NOTICE $nick :can't open a socket for the transfer of $file."}
-  3 {puthelp "NOTICE $nick :$file doesn't exist."}
-  4 {puthelp "NOTICE $nick :$file was queued for later transfer."}
+  set fullfile [set mc_sf${meth}($search)]
+  if {[string match *|* [set s_flag [lindex [split $search] 0]]]} {
+   set search [lrange [split $search] 1 e]
+  } else { set s_flag -|- }
+  if {[string match #* [set s_chan [lindex [split $search] 0]]]} {
+   set search [lrange [split $search] 1 e]
+  } else { set s_chan $chan }
+  if {$chan == "*"} {set m_match [matchattr $hand $s_flag]} else {
+   set m_match [matchattr $hand $s_flag $chan]
+  }
+  if {[string match [string tolower $search] [string tolower $args]] &&
+      [string tolower $chan] == [string tolower $s_chan]} {break} {
+   unset search;unset fullfile;unset s_flag;unset s_chan;unset m_match
+  }
+ };if {![info exists search]} {return 0}
+ foreach sendfile $fullfile {
+  set file [lindex [split $sendfile /] e]
+  switch -- [dccsend $sendfile $nick] {
+   0 {puthelp "NOTICE $nick :Sending $file to you."}
+   1 {puthelp "NOTICE $nick :dcc table is full (too many connections), try to get $file later."}
+   2 {puthelp "NOTICE $nick :can't open a socket for the transfer of $file."}
+   3 {puthelp "NOTICE $nick :$file doesn't exist."}
+   4 {puthelp "NOTICE $nick :$file was queued for later transfer."}
+  }
  }
 }
+
+foreach array [array names mc_sf_pub] {unset mc_sf_pub($array)}
+foreach array [array names mc_sf_msg] {unset mc_sf_msg($array)}
+foreach array [array names mc_sff_pub] {set mc_sf_pub($array) $mc_sff_pub($array)}
+catch {unset mc_sff_pub}
+foreach array [array names mc_sff_msg] {set mc_sf_msg($array) $mc_sff_msg($array)}
+catch {unset mc_sff_msg}
 
 proc mc:sf:inter:chanflagison {chan flag} {
  set chan [string tolower $chan]
