@@ -1,5 +1,5 @@
 ##
-# Send File v1.7.1 by (Carl M. Gregory) MC_8 <gregory@worldinter.net>
+# Send File v1.8 by (Carl M. Gregory) MC_8 <gregory@worldinter.net>
 #
 # If you have any questions/comments/idea's, please email me!
 # ( Include the script name and version in the title, if you do email me. )
@@ -14,6 +14,16 @@
 ##
 # History  ( <fixed by> - <found by> - <info> )
 ##
+# v1.8 (09.30.01)
+#  MC_8 - Fixed 'Tcl error [mcsf:send:raw:privmsg]: wrong # args: should 
+#         be "string range string first last"'.
+#  MC_8 - Fixed 'Tcl error [mcsf:send:msgm]: syntax error in expression "*
+#         == *"'.
+#  MC_8 - Freeder - Added ctcp trigger support.
+#  MC_8 - There was no reason to use #channel with a msg bind -- if it was
+#         there it would just ignore it.  I coded in to ensure the user is
+#         IN the #channel (if specified).
+#
 # v1.7.1 (09.29.01)
 #  MC_8 - ayoob - Flag restrictions were not working, fixed.
 #
@@ -102,17 +112,29 @@
 # Furthermore (getting tired of reading yet?), you can make the command channel
 # specific as well.  You would do so like this:
 #  set "mc_sff_pub(o|o #eggdrop !send)" "{doc/tcl commands.doc} files/commands.doc scripts/weed"
-# The '#' determin's if a channel restriction is in order.
+# The '#' determin's if a channel restriction is in order.  The channel
+# restriction will be used in conjunction with the flag restriction as
+# well as to determin what channel the trigger should be enabled on.
 #
-# Syntax: set "mc_sff_<pub|msg>([flag<|>[s]] [<#>channel] <trigger>)" "<file> [file [..]]"
-#
-# You may set as many as you like, it must be in this syntax:
-# set mc_sff_pub(<enter the trigger here>) "<put the full path to file here>"
+# Syntax: set "mc_sff_<pub|msg|ctcp>([flag<|>[s]] [<#>channel] <trigger>)" "<file> [file [..]]"
 set mc_sff_pub(!tcl) "doc/tcl-commands.doc"
 
-# This is where you set messag'd trigger(s), everything is same as above
-# expect for the insted of set mc_sff_pub it's mc_sff_msg.  Pretty easy.
+# This is where you setup message trigger(s), everything is same as above
+# expect its set mc_sff_msg insted of mc_sff_pub.
+# If you give a channel restriction here, it will be used with the flag
+# restriction as well as to see if the user is IN the channel (can't very
+# well determin if the user triggered it from that #channel *wink*)
 set "mc_sff_msg(m|- get tcl?commands)" "doc/tcl-commands.doc"
+
+# This is where you setup ctcp trigger(s), everything is same as above
+# expect its set mc_sff_ctcp insted of mc_sff_pub.
+# If you give a channel restriction here, it will be used with the flag
+# restriction as well as to see if the user is IN the channel.  This
+# will respond to direct ctcp's and not channel ctcps -- saffer that
+# way.
+set "mc_sff_ctcp(m|- get *list*)" "doc/tcl-commands.doc"
+
+
 
 ## MC SVS (Script Version Service) v1.2 ##
 # Do you want the bot to connection to MC_8's SVS to see if there are newer versions
@@ -147,8 +169,8 @@ set mc_sf(svs:stableonly) 0
 
 
 ### Do not edit past this part ###
-set mc_sf(version) v1.7.1
-set mc_sf(svs:script) "sendfile 001007001000"
+set mc_sf(version) v1.8
+set mc_sf(svs:script) "sendfile 001008000000"
 set mc_sf(svs:server) "mc.purehype.net 8085"
 
 if {$numversion < "1050000"} {
@@ -173,9 +195,22 @@ proc mcsf:send:pubm {n uh h ch a} {mcsf:send $n $uh $h $ch $a "_pub"}
 bind msgm - * mcsf:send:msgm
 proc mcsf:send:msgm {n uh h a} {mcsf:send $n $uh $h * $a "_msg"}
 
+bind raw - PRIVMSG mcsf:send:raw:privmsg
+proc mcsf:send:raw:privmsg {f k a} {
+ set a [string range $a [expr [string first : $a]+1] [string length $a]]
+ if {([string index $a 0] == "\001") &&
+    ([string index $a [expr [string length $a]-1]] == "\001")} {
+  set n [string range $f 0 [expr [string first ! $f]-1]]
+  set uh [string range $f [expr [string first ! $f]+1] [expr [string length $f]-1]]
+  set h [nick2hand $n]
+  set a [string range $a 1 [expr [string length $a]-2]]
+  mcsf:send $n $uh $h * $a "_ctcp"
+ };return 0
+}
+
 proc mcsf:send {nick uhost hand chan args meth} {
- global mc_sf mc_sf_pub mc_sf_msg
- if {($meth == "_pub") && (![mc:sf:inter:chanflagison $chan mc.sendfile])} {return}
+ global mc_sf mc_sf_pub mc_sf_msg mc_sf_ctcp
+ if {($meth == "_pub") && (![mc:sf:inter:chanflagison $chan mc.sendfile])} {return 0}
  foreach search [array names mc_sf${meth}] {
   set fullfile [set mc_sf${meth}($search)]
   if {[string match *|* [set s_flag [lindex [split $search] 0]]]} {
@@ -187,9 +222,14 @@ proc mcsf:send {nick uhost hand chan args meth} {
   if {$chan == "*"} {set m_match [matchattr $hand $s_flag]} else {
    set m_match [matchattr $hand $s_flag $chan]
   }
+  if {(($meth == "_msg") || ($meth == "_ctcp")) && ($s_chan != "*")} {
+   set m_chan [onchan $nick $chan]
+  } else {
+   if {[string tolower $chan] == [string tolower $s_chan]} {set m_chan 1} {set m_chan 0}
+  }
   if {[string match [string tolower $search] [string tolower $args]] &&
-      [string tolower $chan] == [string tolower $s_chan] && $m_match} {break} {
-   unset search;unset fullfile;unset s_flag;unset s_chan;unset m_match
+      $m_chan && $m_match} {break} {
+   unset search;unset fullfile;unset s_flag;unset s_chan;unset m_match;unset m_chan
   }
  };if {![info exists search]} {return 0}
  foreach sendfile $fullfile {
@@ -206,10 +246,13 @@ proc mcsf:send {nick uhost hand chan args meth} {
 
 foreach array [array names mc_sf_pub] {unset mc_sf_pub($array)}
 foreach array [array names mc_sf_msg] {unset mc_sf_msg($array)}
+foreach array [array names mc_sf_ctcp] {unset mc_sf_ctcp($array)}
 foreach array [array names mc_sff_pub] {set mc_sf_pub($array) $mc_sff_pub($array)}
 catch {unset mc_sff_pub}
 foreach array [array names mc_sff_msg] {set mc_sf_msg($array) $mc_sff_msg($array)}
 catch {unset mc_sff_msg}
+foreach array [array names mc_sff_ctcp] {set mc_sf_ctcp($array) $mc_sff_ctcp($array)}
+catch {unset mc_sff_ctcp}
 
 proc mc:sf:inter:chanflagison {chan flag} {
  set chan [string tolower $chan]
